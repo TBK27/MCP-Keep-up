@@ -1,0 +1,15 @@
+﻿# Local secrets - never commit
+.env
+*.env
+github_pat.txt
+token.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS junk
+.DS_Store
+Thumbs.db

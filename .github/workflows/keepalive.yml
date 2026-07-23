@@ -1,0 +1,40 @@
+﻿name: MCP Keepalive
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ping a random MCP tool
+        env:
+          MCP_SESSION_TOKEN: ${{ secrets.MCP_SESSION_TOKEN }}
+          MCP_SERVER_URL: ${{ vars.MCP_SERVER_URL }}
+        run: python scripts/keepalive.py
+
+      - name: Prevent 60-day scheduled-workflow auto-disable
+        run: |
+          LAST_COMMIT_DATE=$(git log -1 --format=%ct)
+          NOW=$(date +%s)
+          DAYS_SINCE=$(( (NOW - LAST_COMMIT_DATE) / 86400 ))
+          echo "Days since last commit: $DAYS_SINCE"
+          if [ "$DAYS_SINCE" -ge 45 ]; then
+            echo "Repo inactive $DAYS_SINCE days - pushing keepalive commit."
+            git config user.name "keepalive-bot"
+            git config user.email "actions@users.noreply.github.com"
+            date -u +"%Y-%m-%dT%H:%M:%SZ" > .last-keepalive
+            git add .last-keepalive
+            git commit -m "chore: keepalive commit to prevent workflow auto-disable"
+            git push
+          else
+            echo "No keepalive commit needed yet."
+          fi
