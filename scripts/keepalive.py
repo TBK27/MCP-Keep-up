@@ -40,10 +40,10 @@ if not REFRESH_TOKEN or not CLIENT_ID:
 TOOL_POOL = [
     ("list_calendars", {}),
     ("get_events", {}),
-    ("search_drive_files", {"query": "type:document"}),
-    ("search_gmail_messages", {"query": "in:inbox"}),
-    ("list_tasks", {}),
-    ("list_contacts", {}),
+    ("search_drive_files", {"query": "type:document", "page_size": 3}),
+    ("search_gmail_messages", {"query": "in:inbox", "page_size": 3}),
+    ("list_tasks", {"task_list_id": "MDEzNTA1MjYyMjk1MjA2NTI1NDA6MDow"}),
+    ("list_contacts", {"page_size": 3}),
 ]
 
 
