@@ -82,7 +82,7 @@ async def run_callback_server(result: CallbackResult):
     return runner
 
 
-def push_secret_to_github(token_value: str):
+def push_secret_to_github(token_value: str, secret_name: str = "MCP_SESSION_TOKEN"):
     from nacl import encoding, public
 
     headers = {
@@ -101,12 +101,12 @@ def push_secret_to_github(token_value: str):
         encrypted_b64 = base64.b64encode(encrypted).decode("utf-8")
 
         put_resp = client.put(
-            f"https://api.github.com/repos/{GITHUB_REPO}/actions/secrets/MCP_SESSION_TOKEN",
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/secrets/{secret_name}",
             headers=headers,
             json={"encrypted_value": encrypted_b64, "key_id": key_data["key_id"]},
         )
         put_resp.raise_for_status()
-        print(f"\nSuccess: MCP_SESSION_TOKEN updated on {GITHUB_REPO}. (status {put_resp.status_code})")
+        print(f"\nSuccess: {secret_name} updated on {GITHUB_REPO}. (status {put_resp.status_code})")
 
 
 async def main():
@@ -187,12 +187,18 @@ async def main():
             token_data = token_resp.json()
 
             access_token = token_data.get("access_token")
+            refresh_token = token_data.get("refresh_token")
+
             if not access_token:
                 print(f"ERROR: No access_token in response: {token_data}", file=sys.stderr)
                 sys.exit(1)
+            if not refresh_token:
+                print(f"ERROR: No refresh_token in response - cannot set up auto-renewal: {token_data}", file=sys.stderr)
+                sys.exit(1)
 
-            print(f"\nGot access token (expires_in={token_data.get('expires_in')}s).")
-            push_secret_to_github(access_token)
+            print(f"\nGot access token (expires_in={token_data.get('expires_in')}s) and a refresh token.")
+            push_secret_to_github(refresh_token, secret_name="MCP_REFRESH_TOKEN")
+            push_secret_to_github(client_id, secret_name="MCP_CLIENT_ID")
 
         finally:
             await runner.cleanup()

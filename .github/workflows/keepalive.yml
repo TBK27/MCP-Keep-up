@@ -17,7 +17,8 @@ jobs:
 
       - name: Ping a random MCP tool
         env:
-          MCP_SESSION_TOKEN: ${{ secrets.MCP_SESSION_TOKEN }}
+          MCP_REFRESH_TOKEN: ${{ secrets.MCP_REFRESH_TOKEN }}
+          MCP_CLIENT_ID: ${{ secrets.MCP_CLIENT_ID }}
           MCP_SERVER_URL: ${{ vars.MCP_SERVER_URL }}
         run: python scripts/keepalive.py
 
