@@ -20,6 +20,9 @@ import sys
 import urllib.request
 import urllib.error
 import urllib.parse
+import base64
+import httpx
+from nacl import encoding, public
 
 MCP_URL = os.environ.get("MCP_SERVER_URL", "https://google-workspace-mcp-4fbe.onrender.com/mcp")
 SERVER_BASE = MCP_URL.rsplit("/mcp", 1)[0]
@@ -27,6 +30,8 @@ TOKEN_URL = f"{SERVER_BASE}/token"
 
 REFRESH_TOKEN = os.environ.get("MCP_REFRESH_TOKEN")
 CLIENT_ID = os.environ.get("MCP_CLIENT_ID")
+GITHUB_PAT = os.environ.get("GITHUB_PAT")
+GITHUB_REPO = os.environ.get("GITHUB_REPO")
 
 if not REFRESH_TOKEN or not CLIENT_ID:
     print("ERROR: MCP_REFRESH_TOKEN and MCP_CLIENT_ID must be set.", file=sys.stderr)
@@ -42,7 +47,7 @@ TOOL_POOL = [
 ]
 
 
-def get_fresh_access_token() -> str:
+def get_fresh_access_token():
     data = urllib.parse.urlencode({
         "grant_type": "refresh_token",
         "refresh_token": REFRESH_TOKEN,
@@ -58,9 +63,10 @@ def get_fresh_access_token() -> str:
     with urllib.request.urlopen(req, timeout=20) as resp:
         body = json.loads(resp.read().decode("utf-8"))
         access_token = body.get("access_token")
+        new_refresh_token = body.get("refresh_token")
         if not access_token:
             raise RuntimeError(f"No access_token in refresh response: {body}")
-        return access_token
+        return access_token, new_refresh_token
 
 
 def post_json(url, payload, access_token, session_id=None):
@@ -80,11 +86,40 @@ def post_json(url, payload, access_token, session_id=None):
         return resp.status, body, new_session_id
 
 
+def push_secret_to_github(token_value: str, secret_name: str):
+    if not GITHUB_PAT or not GITHUB_REPO:
+        print("WARNING: GITHUB_PAT/GITHUB_REPO not set, cannot rotate refresh token secret.", file=sys.stderr)
+        return
+    headers = {
+        "Authorization": f"Bearer {GITHUB_PAT}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    with httpx.Client() as client:
+        key_resp = client.get(f"https://api.github.com/repos/{GITHUB_REPO}/actions/secrets/public-key", headers=headers)
+        key_resp.raise_for_status()
+        key_data = key_resp.json()
+        public_key = public.PublicKey(key_data["key"].encode("utf-8"), encoding.Base64Encoder())
+        sealed_box = public.SealedBox(public_key)
+        encrypted = sealed_box.encrypt(token_value.encode("utf-8"))
+        encrypted_b64 = base64.b64encode(encrypted).decode("utf-8")
+        put_resp = client.put(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/secrets/{secret_name}",
+            headers=headers,
+            json={"encrypted_value": encrypted_b64, "key_id": key_data["key_id"]},
+        )
+        put_resp.raise_for_status()
+        print(f"Rotated refresh token pushed to {secret_name}.")
+
+
 def main():
     try:
         print("Refreshing access token...")
-        access_token = get_fresh_access_token()
+        access_token, new_refresh_token = get_fresh_access_token()
         print("Got fresh access token.")
+        if new_refresh_token and new_refresh_token != REFRESH_TOKEN:
+            print("Refresh token was rotated by server - updating GitHub secret...")
+            push_secret_to_github(new_refresh_token, "MCP_REFRESH_TOKEN")
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         print(f"Token refresh failed - HTTPError {e.code}: {body[:500]}", file=sys.stderr)

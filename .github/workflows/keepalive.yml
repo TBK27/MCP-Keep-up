@@ -20,6 +20,8 @@ jobs:
           MCP_REFRESH_TOKEN: ${{ secrets.MCP_REFRESH_TOKEN }}
           MCP_CLIENT_ID: ${{ secrets.MCP_CLIENT_ID }}
           MCP_SERVER_URL: ${{ vars.MCP_SERVER_URL }}
+          GITHUB_PAT: ${{ secrets.GH_PAT_FOR_ROTATION }}
+          GITHUB_REPO: ${{ github.repository }}
         run: python scripts/keepalive.py
 
       - name: Prevent 60-day scheduled-workflow auto-disable
