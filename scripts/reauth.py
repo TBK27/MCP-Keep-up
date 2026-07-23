@@ -132,6 +132,16 @@ async def main():
         verifier, challenge = generate_pkce()
         state = secrets.token_urlsafe(16)
 
+        SCOPES = " ".join([
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/calendar.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/tasks.readonly",
+            "https://www.googleapis.com/auth/contacts.readonly",
+        ])
+
         params = {
             "response_type": "code",
             "client_id": client_id,
@@ -139,6 +149,7 @@ async def main():
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
+            "scope": SCOPES,
         }
         auth_url = f"{AUTHORIZE_URL}?{urlencode(params)}"
 
