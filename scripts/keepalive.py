@@ -39,7 +39,7 @@ if not REFRESH_TOKEN or not CLIENT_ID:
 
 TOOL_POOL = [
     ("list_calendars", {}),
-    ("get_events", {"time_min": "today", "time_max": "today"}),
+    ("get_events", {}),
     ("search_drive_files", {"query": "type:document"}),
     ("search_gmail_messages", {"query": "in:inbox"}),
     ("list_tasks", {}),
