@@ -264,17 +264,12 @@
       </div>
       <div class="connector" id="conn-1"><div class="pulse-line"></div></div>
       <div class="node">
-        <div class="node-dot pending" id="dot-keepalive"></div>
-        <div class="node-label">Keepalive</div>
-        <div class="node-sub" id="sub-keepalive">checking…</div>
-      </div>
-      <div class="connector" id="conn-2"><div class="pulse-line"></div></div>
-      <div class="node">
-        <div class="node-dot pending" id="dot-auth"></div>
-        <div class="node-label">Google Auth</div>
-        <div class="node-sub" id="sub-auth">checking…</div>
+        <div class="node-dot pending" id="dot-sessions"></div>
+        <div class="node-label">Sessions</div>
+        <div class="node-sub" id="sub-sessions">checking…</div>
       </div>
     </div>
+  </div>
   </div>
 
   <div class="cards">
@@ -288,18 +283,10 @@
 
     <div class="card">
       <div class="card-top">
-        <div class="card-title">Keepalive</div>
-        <div class="badge pending" id="badge-keepalive">Checking</div>
+        <div class="card-title">Sessions</div>
+        <div class="badge pending" id="badge-sessions">Checking</div>
       </div>
-      <div class="card-detail" id="detail-keepalive">Reading recent run history…</div>
-    </div>
-
-    <div class="card">
-      <div class="card-top">
-        <div class="card-title">Auth Rotation</div>
-        <div class="badge pending" id="badge-auth">Checking</div>
-      </div>
-      <div class="card-detail" id="detail-auth">Confirming token refresh is current…</div>
+      <div class="card-detail" id="detail-sessions">Checking whether logins are staying connected…</div>
     </div>
   </div>
 
@@ -319,8 +306,17 @@ function setNode(key, state, sub) {
   document.getElementById(`dot-${key}`).className = `node-dot ${state}`;
   document.getElementById(`sub-${key}`).textContent = sub;
   document.getElementById(`badge-${key}`).className = `badge ${state}`;
-  document.getElementById(`badge-${key}`).textContent =
-    state === 'good' ? 'Healthy' : state === 'warn' ? 'Degraded' : state === 'bad' ? 'Down' : 'Checking';
+
+  let label;
+  if (key === 'server') {
+    // We can only confirm the server answers a connection, not that
+    // every endpoint on it is working correctly - "Reachable" is the
+    // honest word here, not "Healthy".
+    label = state === 'good' ? 'Reachable' : state === 'bad' ? 'Unreachable' : 'Checking';
+  } else {
+    label = state === 'good' ? 'Healthy' : state === 'warn' ? 'Degraded' : state === 'bad' ? 'Down' : 'Checking';
+  }
+  document.getElementById(`badge-${key}`).textContent = label;
 }
 
 function setConnector(id, ok) {
@@ -357,62 +353,56 @@ async function checkServer() {
   }
 }
 
-async function checkKeepalive() {
+async function checkSessions() {
   try {
-    const resp = await fetch(`https://api.github.com/repos/${REPO}/actions/runs?per_page=5`, {
+    const resp = await fetch(`https://api.github.com/repos/${REPO}/actions/runs?per_page=6`, {
       headers: { 'Accept': 'application/vnd.github+json' }
     });
     const data = await resp.json();
     const runs = data.workflow_runs || [];
     if (runs.length === 0) {
-      setNode('keepalive', 'warn', 'no runs yet');
-      document.getElementById('detail-keepalive').innerHTML = `No runs found yet.`;
+      setNode('sessions', 'warn', 'no data yet');
+      document.getElementById('detail-sessions').innerHTML = `No checks have run yet.`;
       return { ok: false };
     }
+
     const latest = runs[0];
-    const isSuccess = latest.conclusion === 'success';
-    const recentFails = runs.filter(r => r.conclusion === 'failure').length;
+    const latestOk = latest.conclusion === 'success';
+    const recentFailCount = runs.filter(r => r.conclusion === 'failure').length;
 
-    if (isSuccess) {
-      setNode('keepalive', 'good', timeAgo(latest.updated_at));
-      document.getElementById('detail-keepalive').innerHTML =
-        `<strong>Running normally.</strong> Last successful check: ${timeAgo(latest.updated_at)}.`;
-    } else if (recentFails < runs.length) {
-      setNode('keepalive', 'warn', timeAgo(latest.updated_at));
-      document.getElementById('detail-keepalive').innerHTML =
-        `<strong>Intermittent.</strong> Last run failed, but recent checks have mostly succeeded.`;
-    } else {
-      setNode('keepalive', 'bad', timeAgo(latest.updated_at));
-      document.getElementById('detail-keepalive').innerHTML =
-        `<strong>Failing.</strong> The last several checks did not succeed.`;
+    if (latestOk) {
+      setNode('sessions', 'good', timeAgo(latest.updated_at));
+      document.getElementById('detail-sessions').innerHTML =
+        `<strong>Staying connected.</strong> Last confirmed ${timeAgo(latest.updated_at)}.`;
+      return { ok: true };
     }
-    return { ok: isSuccess, latest };
-  } catch (e) {
-    setNode('keepalive', 'warn', 'unknown');
-    document.getElementById('detail-keepalive').innerHTML = `Couldn't load run history right now.`;
-    return { ok: false };
-  }
-}
 
-function checkAuth(keepaliveResult) {
-  if (keepaliveResult.ok) {
-    setNode('auth', 'good', 'rotating');
-    document.getElementById('detail-auth').innerHTML =
-      `<strong>Rotating normally.</strong> Inferred from recent successful checks.`;
-  } else {
-    setNode('auth', 'warn', 'unclear');
-    document.getElementById('detail-auth').innerHTML =
-      `<strong>Unclear.</strong> Recent checks aren't succeeding — this may be why.`;
+    if (recentFailCount >= 3) {
+      // Several in a row failing = logins have likely expired and need
+      // to be refreshed on Logan's end, not something the person
+      // looking at this page can fix themselves.
+      setNode('sessions', 'bad', timeAgo(latest.updated_at));
+      document.getElementById('detail-sessions').innerHTML =
+        `<strong>Not staying connected.</strong> Logins have expired - this needs to be fixed on the server side, not something to retry on your end.`;
+      return { ok: false };
+    }
+
+    setNode('sessions', 'warn', timeAgo(latest.updated_at));
+    document.getElementById('detail-sessions').innerHTML =
+      `<strong>One recent check failed.</strong> Might just be a blip - check back in a few minutes.`;
+    return { ok: false };
+  } catch (e) {
+    setNode('sessions', 'warn', 'unknown');
+    document.getElementById('detail-sessions').innerHTML = `Couldn't check right now.`;
+    return { ok: false };
   }
 }
 
 async function runChecks() {
   const serverOk = await checkServer();
-  const keepaliveResult = await checkKeepalive();
-  checkAuth(keepaliveResult);
+  const sessionsResult = await checkSessions();
 
-  setConnector('conn-1', serverOk);
-  setConnector('conn-2', keepaliveResult.ok);
+  setConnector('conn-1', serverOk && sessionsResult.ok);
 
   document.getElementById('last-checked').textContent = new Date().toLocaleTimeString();
 }
