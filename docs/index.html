@@ -339,9 +339,10 @@ function timeAgo(dateStr) {
 
 async function checkServer() {
   try {
-    const resp = await fetch(SERVER_URL, {
+    await fetch(SERVER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })
     });
     setNode('server', 'good', 'reachable');
@@ -351,7 +352,7 @@ async function checkServer() {
   } catch (e) {
     setNode('server', 'bad', 'unreachable');
     document.getElementById('detail-server').innerHTML =
-      `<strong>Not responding.</strong> The server may be waking up — try again in a minute.`;
+      `<strong>Not responding.</strong> The server may be waking up. Try again in a minute.`;
     return false;
   }
 }
