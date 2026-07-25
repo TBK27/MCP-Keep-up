@@ -28,7 +28,7 @@ SERVER_BASE = MCP_URL.rsplit("/mcp", 1)[0]
 ENDPOINTS = [
     f"{SERVER_BASE}/health",
     f"{SERVER_BASE}/.well-known/oauth-authorization-server",
-    f"{SERVER_BASE}/.well-known/oauth-protected-resource",
+    f"{SERVER_BASE}/.well-known/oauth-protected-resource/mcp",
 ]
 
 
