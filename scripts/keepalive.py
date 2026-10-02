@@ -58,6 +58,19 @@ def try_ping(url, timeout):
     except urllib.error.URLError as e:
         print(f"Connection error: {e.reason}", file=sys.stderr)
         return False
+    except TimeoutError as e:
+        # A URLError only wraps timeouts during connect. A stall during the
+        # read (connection opened, server just never sent headers back -
+        # e.g. Render cold-starting) raises a bare TimeoutError instead,
+        # which was escaping try_ping entirely and killing the whole
+        # script before the retry below ever ran.
+        print(f"Read timed out: {e}", file=sys.stderr)
+        return False
+    except OSError as e:
+        # Catch-all for other low-level socket errors (reset connections,
+        # DNS hiccups) so a single bad ping can't crash the run outright.
+        print(f"Socket error: {e}", file=sys.stderr)
+        return False
 
 
 def main():
